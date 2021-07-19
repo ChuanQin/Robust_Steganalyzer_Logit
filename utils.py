@@ -1,6 +1,7 @@
 import torch
 import models
 import torch.nn as nn
+import subprocess
 
 def get_CNN_prob(
     model,
@@ -18,3 +19,21 @@ def get_CNN_prob(
                 = nn.functional.softmax(output_batch)
             names.extend(list(data[1]))
     return probs, names
+
+def get_hand_prob(
+    feature_path, 
+    clf_path, 
+    ref_tst_dir):
+    matlab = ['matlab']
+    options = ['-nodisplay', '-nosplash', '-nodesktop', '-r']
+    command = ['"cd ./matlab; get_hand_prob_RS(\'{}\',\'{}\',\'{}\'); exit;"'.\
+                    format(feature_path, clf_path, ref_tst_dir)]
+    subp = subprocess.Popen(' '.join(matlab + options + command), stdout = subprocess.DEVNULL, shell = True)
+    subp.wait()
+    hand_prob = io.loadmat('./tmp/hand_prob.mat')['prob']
+    hand_names_tmp = io.loadmat('./tmp/hand_prob.mat')['names']
+    hand_names = []
+    for i in range(len(hand_names_tmp)):
+        hand_names.append(hand_names_tmp[i][0][0])
+
+    return hand_prob, hand_names
