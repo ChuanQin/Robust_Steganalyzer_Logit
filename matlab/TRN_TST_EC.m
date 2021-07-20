@@ -12,9 +12,9 @@ function TRN_TST_EC(cover_dir, stego_dir, feature_dir, payload, ec_path, ref_trn
     cover_fea_dir = [feature_dir, 'cover.mat'];
     split_stego = split(stego_dir, '/'); 
     % Conventional stego
-    stego_fea_dir = [feature_dir, split_stego{end-2}, '_', num2str(payload), '.mat'];
+    % stego_fea_dir = [feature_dir, split_stego{end-2}, '_', num2str(payload), '.mat'];
     % Adversarial stego
-    % stego_fea_dir = [feature_dir, split_stego{end-4}, '_', split_stego{end-3}, '_', split_stego{end-2}, '_', split_stego{end-1}, '.mat'];
+    stego_fea_dir = [feature_dir, split_stego{end-4}, '_', split_stego{end-3}, '_', split_stego{end-2}, '_', split_stego{end-1}, '.mat'];
 
     cover = matfile(cover_fea_dir);
     stego = matfile(stego_fea_dir); 

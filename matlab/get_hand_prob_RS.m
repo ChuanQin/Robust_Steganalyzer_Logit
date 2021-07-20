@@ -27,5 +27,8 @@ function get_hand_prob_RS(feature_path, clf_path, ref_tst_dir)
     prob = exp(prob(:,1)*5.5)./(exp(prob(:,1)*5.5)+exp(prob(:,2)*5.5));
     % prob = prob(:,1);
     % save prob results
-    save('./tmp/hand_prob.mat', 'prob', 'names');
+    if ~exist('./hand_probs', 'dir')
+       mkdir('./hand_probs')
+    end
+    save('./hand_probs/hand_prob.mat', 'prob', 'names');
 end

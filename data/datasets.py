@@ -10,10 +10,11 @@ import os
 class ImageWithNameDataset(Dataset):
 
     def __init__(self, img_dir, indices = None, ref_dir = None, transform = None, repeat = 1):
-        super(CoverRhoDataset, self).__init__()
+        super(ImageWithNameDataset, self).__init__()
 
         self.img_dir = img_dir
         self.indices = indices
+        self.ref_dir = ref_dir
         full_img_list = sorted(glob(self.img_dir + '/*'))
         if indices is not None:
             self.img_list = [full_img_list[i-1] for i in indices]
@@ -21,7 +22,8 @@ class ImageWithNameDataset(Dataset):
             self.img_list = os.listdir(ref_dir)
         else:
             self.img_list = full_img_list.copy()
-        if np.size(np.where(np.asarray(self.img_dir.split('/'))=='cover'))!=0:
+        if np.size(np.where(np.asarray(self.img_dir.split('/'))=='cover'))!=0 or \
+        any([any(np.asarray(dir_str.split('_'))=='cover') for dir_str in self.img_dir.split('/')]):
             self.label_list = np.zeros(len(self.img_list))
         else:
             self.label_list = np.ones(len(self.img_list))
@@ -32,7 +34,10 @@ class ImageWithNameDataset(Dataset):
     def __getitem__(self, i):
         index = i % self.len
         label = np.array(self.label_list[index])
-        image_path = self.img_list[index]
+        if self.ref_dir is None:
+            image_path = self.img_list[index]
+        else:
+            image_path = self.img_dir + '/' + self.img_list[index]
         img = self.transform(Image.open(image_path))
         return img, image_path.split('/')[-1], label
 
