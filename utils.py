@@ -30,7 +30,7 @@ def align_cnn_hand_data(
     sort_idx = np.argsort(cnn_names)
     cnn_names = cnn_names[sort_idx].copy()
     cnn_probs = cnn_probs[sort_idx].copy()
-    hand_probs = np.squeeze(hand_probs[np.argsort(hand_names)], axis = 1)
+    hand_probs = hand_probs[np.argsort(hand_names)]
     hand_names = hand_names[np.argsort(hand_names)].copy()
     hand_names_list = hand_names.tolist()
     inter_ind = [hand_names_list.index(i) for i in cnn_names]

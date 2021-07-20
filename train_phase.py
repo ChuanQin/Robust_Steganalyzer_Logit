@@ -5,6 +5,7 @@ import torch
 import torchvision
 import argparse
 import torch.nn as nn
+import os
 import models
 import data
 from utils import get_CNN_prob, get_hand_prob, align_cnn_hand_data
@@ -51,6 +52,9 @@ def train_Rough_Filter(
     train_probs = prob[both_cover,:]
     rough_filter = SVC(kernel = 'rbf', gamma = 50, C = 20)
     rough_filter.fit(train_probs, train_labels)
+    rough_filter_dir = '/'.join(save_path.split('/')[:-1])
+    if not os.path.exists(rough_filter_dir):
+        os.makedirs(rough_filter_dir)
     pickle.dump(rough_filter, open(save_path, 'wb'))
 
     return rough_filter
