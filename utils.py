@@ -76,3 +76,33 @@ def get_hand_prob(
         hand_names.append(hand_names_tmp[i][0][0])
 
     return np.squeeze(hand_prob), hand_names
+
+from sklearn import metrics
+def get_AUC(
+    cover_probs,
+    stego_probs,
+    adv_probs):
+    """
+    default percentage of c:s:a = 2:1:1
+    """
+    random_images = np.arange(0, stego_probs.shape[0]+adv_probs.shape[0])
+    np.random.seed(2021)
+    np.random.shuffle(random_images)
+
+    stego_adv_probs = np.concatenate((stego_probs,adv_probs), axis = 0)
+    mix_probs = np.asarray([stego_adv_probs[i,] for i in random_images[:(stego_probs.shape[0]+adv_probs.shape[0])//2]])
+
+    # c:s:a = 1:1:1
+    # fpr,tpr,thresholds = metrics.roc_curve(y_true = np.concatenate((np.zeros((5000,)),np.ones((10000,)))),\
+    #                     y_score = np.concatenate((cover_probs[:,1],stego_probs[:,1],adv_probs[:,1])))
+    auc_111 = metrics.roc_auc_score(y_true = np.concatenate((np.zeros((5000,)),np.ones((10000,)))),\
+                        y_score = np.concatenate((cover_probs[:,1],stego_probs[:,1],adv_probs[:,1])))
+
+    # c:s:a = 2:1:1
+    fpr,tpr,thresholds = metrics.roc_curve(y_true = np.concatenate((np.zeros((5000,)),np.ones((5000,)))),\
+                        y_score = np.concatenate((cover_probs[:,1],mix_probs[:,1])))
+    auc_211 = metrics.roc_auc_score(y_true = np.concatenate((np.zeros((5000,)),np.ones((5000,)))),\
+                        y_score = np.concatenate((cover_probs[:,1],mix_probs[:,1])))
+    print('CNN AUC(c:s:a=1:1:1): {:.4f}, CNN AUC(c:s:a=2:1:1): {:.4f}'.format(auc_111, auc_211))
+
+    return auc_111, auc_211

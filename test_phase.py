@@ -7,7 +7,7 @@ import argparse
 import torch.nn as nn
 import models
 import data
-from utils import get_CNN_prob, get_hand_prob, align_cnn_hand_data
+from utils import get_CNN_prob, get_hand_prob, align_cnn_hand_data, get_AUC
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -67,18 +67,18 @@ def set_model(args):
     return net
 
 def test_Rough_Filter(
-    CNN_prob,
-    hand_prob,
+    cnn_probs,
+    hand_probs,
     names,
     rough_filter_path):
     rough_filter = pickle.load(open(rough_filter_path, 'rb'))
-    prob = np.stack((hand_prob, CNN_prob[:,0]), axis = 1)
+    prob = np.stack((hand_probs, cnn_probs[:,0]), axis = 1)
     suspiciousI = names[np.where((prob[:,0]<0.5)&(prob[:,1]>=0.5))]
     reliableI = names[np.where(prob[:,1]<0.5)]
     both_cover = np.asarray(list(set(np.where(prob[:,0]>=0.5)[0])&set(np.where(prob[:,1]>=0.5)[0])))
     if len(both_cover)!=0:
-        suspiciousII = names[both_cover[np.where(clf.predict(prob[both_cover,:])==1)[0]]]
-        reliableII = names[both_cover[np.where(clf.predict(prob[both_cover,:])==0)[0]]]
+        suspiciousII = names[both_cover[np.where(rough_filter.predict(prob[both_cover,:])==1)[0]]]
+        reliableII = names[both_cover[np.where(rough_filter.predict(prob[both_cover,:])==0)[0]]]
     else:
         suspiciousII = np.asarray([])
         reliableII = np.asarray([])
@@ -86,10 +86,36 @@ def test_Rough_Filter(
     suspicious = np.asarray(list(set(suspiciousI).union(set(suspiciousII))))
     return suspicious, reliable
 
+def get_final_preds(
+    pred_probs,
+    pred_labels,
+    cnn_probs,
+    hand_probs,
+    spc_probs,
+    names,
+    rough_filter_path):
+
+    suspicious_names, reliable_names = test_Rough_Filter(
+        cnn_probs = cnn_probs, hand_probs = hand_probs, names = names, 
+        rough_filter_path = rough_filter_path)
+
+    reliable_idx = np.searchsorted(names, reliable_names)
+    for i in reliable_idx:
+        pred_probs[i,0] = cnn_probs[i,0].copy()
+    suspicious_idx = np.searchsorted(names, suspicious_names)
+    for i in suspicious_idx:
+        pred_probs[i,0] = spc_probs[i].copy()
+    pred_labels[np.where(pred_probs[:,0]<0.5)] = 1
+    pred_probs[:,1] = 1 - pred_probs[:,0]
+
+    return pred_labels, pred_probs
+
+
 
 args = parse_args()
 net = set_model(args)
 cover_loader, stego_loader, adv_loader = set_dataloader(args)
+pred_labels = np.zeros((cover_loader.dataset.len,))
 pred_probs = np.zeros((cover_loader.dataset.len,2))
 
 cover_cnn_probs, cover_cnn_names = get_CNN_prob(net, cover_loader)
@@ -104,16 +130,6 @@ cover_cnn_probs, cover_hand_probs, names = align_cnn_hand_data(cover_cnn_probs, 
 stego_cnn_probs, stego_hand_probs, _ = align_cnn_hand_data(stego_cnn_probs, stego_hand_probs, stego_cnn_names, stego_hand_names)
 adv_cnn_probs, adv_hand_probs, _ = align_cnn_hand_data(adv_cnn_probs, adv_hand_probs, adv_cnn_names, adv_hand_names)
 
-cnn_probs = np.concatenate((cover_cnn_probs, stego_cnn_probs, adv_cnn_probs), 0)
-hand_probs = np.concatenate((cover_hand_probs, stego_hand_probs, adv_hand_probs), 0)
-suspicious_names, reliable_names = test_Rough_Filter(
-    CNN_prob = cnn_probs, hand_prob = hand_probs, names = names, 
-    load_path = args.rough_filter_path)
-
-reliable_idx = np.searchsorted(names, reliable_names)
-for i in reliable_idx:
-    pred_probs[i,0] = cnn_probs[i].copy()
-
 cover_spc_hand_probs, _ = get_hand_prob(args.cover_feature_path, args.spc_ec_path, args.cover_dir)
 stego_spc_hand_probs, _ = get_hand_prob(args.stego_feature_path, args.spc_ec_path, args.cover_dir)
 adv_spc_hand_probs, _ = get_hand_prob(args.adv_feature_path, args.spc_ec_path, args.cover_dir)
@@ -122,11 +138,39 @@ _, cover_spc_hand_probs, spc_names = align_cnn_hand_data(cover_cnn_probs, cover_
 _, stego_spc_hand_probs, _ = align_cnn_hand_data(stego_cnn_probs, stego_spc_hand_probs, stego_cnn_names, stego_hand_names)
 _, adv_spc_hand_probs, _ = align_cnn_hand_data(adv_cnn_probs, adv_spc_hand_probs, adv_cnn_names, adv_hand_names)
 
-spc_probs = np.concatenate((cover_cnn_cover_spc_hand_probsprobs, stego_spc_hand_probs, adv_spc_hand_probs), 0)
-suspicious_idx = np.searchsorted(names, suspicious_names)
-for i in suspicious_idx:
-    pred_probs[i,0] = spc_probs[i].copy()
+cover_pred_labels, cover_pred_probs = get_final_preds(
+        pred_probs = np.zeros((cover_loader.dataset.len,2)),
+        pred_labels = np.zeros((cover_loader.dataset.len,)),
+        cnn_probs = cover_cnn_probs,
+        hand_probs = cover_hand_probs,
+        spc_probs = cover_spc_hand_probs,
+        names = names,
+        rough_filter_path = args.rough_filter_path)
+print('Accuracy on cover images is: {:.4f}'.\
+    format((cover_pred_labels==np.zeros((cover_loader.dataset.len,))).sum()/cover_loader.dataset.len))
 
-# set labels
-pred_label[np.where(pred_prob[:,0]<0.5)] = 1
-pred_prob[:,1] = 1 - pred_prob[:,0]
+stego_pred_labels, stego_pred_probs = get_final_preds(
+        pred_probs = np.zeros((cover_loader.dataset.len,2)),
+        pred_labels = np.zeros((cover_loader.dataset.len,)),
+        cnn_probs = stego_cnn_probs,
+        hand_probs = stego_hand_probs,
+        spc_probs = stego_spc_hand_probs,
+        names = names,
+        rough_filter_path = args.rough_filter_path)
+print('Accuracy on stego images is: {:.4f}'.\
+    format((stego_pred_labels==np.ones((stego_loader.dataset.len,))).sum()/stego_loader.dataset.len))
+
+adv_pred_labels, adv_pred_probs = get_final_preds(
+        pred_probs = np.zeros((cover_loader.dataset.len,2)),
+        pred_labels = np.zeros((cover_loader.dataset.len,)),
+        cnn_probs = adv_cnn_probs,
+        hand_probs = adv_hand_probs,
+        spc_probs = adv_spc_hand_probs,
+        names = names,
+        rough_filter_path = args.rough_filter_path)
+print('Accuracy on adv images is: {:.4f}'.\
+    format((adv_pred_labels==np.ones((adv_loader.dataset.len,))).sum()/adv_loader.dataset.len))
+
+get_AUC(cover_probs = cover_pred_probs,
+    stego_probs = stego_pred_probs,
+    adv_probs = adv_pred_probs)
